@@ -76,7 +76,7 @@ Finding movie showtimes and prices across Greater Porto is notoriously fragmente
 
 ```bash
 # 1. Clone repository
-git clone https://github.com/your-username/cineporto-bot.git
+git clone https://github.com/gust330/cineporto-bot.git
 cd cineporto-bot
 
 # 2. Create and activate virtual environment
