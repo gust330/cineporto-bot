@@ -15,6 +15,17 @@ from cineporto.cli import main as cli_main
 
 
 def main():
+    if "--once" in sys.argv:
+        token = os.getenv("TELEGRAM_BOT_TOKEN")
+        if not token:
+            print("Erro: TELEGRAM_BOT_TOKEN é obrigatório para processar atualizações do Telegram.")
+            return 1
+        bot = CinePortoBot(token=token)
+        state_file = os.getenv("STATE_FILE", "state.json")
+        count = bot.process_updates_once(state_file=state_file)
+        print(f"Atualizações processadas com sucesso: {count}")
+        return 0
+
     if len(sys.argv) > 1 and sys.argv[1] not in ["--daemon", "--bot"]:
         # Run CLI query mode
         return cli_main()

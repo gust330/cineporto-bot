@@ -1,5 +1,6 @@
 """Telegram bot interface for CinePorto."""
 import logging
+import os
 import time
 import urllib.request
 import urllib.parse
@@ -120,8 +121,69 @@ class CinePortoBot:
 
         return self.service.format_comparison(comp)
 
+    def _fetch_updates(self, offset: int, timeout: int = 20) -> List[Dict[str, Any]]:
+        """Fetch pending updates from Telegram API."""
+        if not self.token:
+            return []
+        url = f"{self.api_base}/getUpdates?offset={offset}&timeout={timeout}"
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout + 10) as resp:
+                data = json.loads(resp.read().decode("utf-8", errors="replace"))
+                return data.get("result", [])
+        except Exception as e:
+            logger.error(f"Error fetching updates from Telegram: {e}")
+            return []
+
+    def process_updates_once(self, state_file: Optional[str] = None) -> int:
+        """
+        Polls pending updates once, handles incoming messages, acknowledges the offset,
+        and persists state. Ideal for serverless, cron jobs, and CI workflows.
+        """
+        if not self.token:
+            raise ValueError("TELEGRAM_BOT_TOKEN is not configured.")
+
+        offset = 0
+        state = {}
+        if state_file and os.path.exists(state_file):
+            try:
+                with open(state_file, "r", encoding="utf-8") as f:
+                    state = json.load(f)
+                    offset = state.get("last_offset", 0)
+            except Exception as e:
+                logger.warning(f"Could not load state file {state_file}: {e}")
+
+        updates = self._fetch_updates(offset=offset, timeout=5)
+        processed_count = 0
+
+        for u in updates:
+            update_id = u.get("update_id", 0)
+            offset = max(offset, update_id + 1)
+            msg = u.get("message", {})
+            chat_id = str(msg.get("chat", {}).get("id", ""))
+            text = msg.get("text", "")
+
+            if chat_id and text:
+                logger.info(f"Processing message from chat {chat_id}: {text}")
+                reply = self.handle_message(text, chat_id)
+                self.send_message(chat_id, reply)
+                processed_count += 1
+
+        if state_file:
+            state["last_offset"] = offset
+            try:
+                with open(state_file, "w", encoding="utf-8") as f:
+                    json.dump(state, f, indent=2)
+            except Exception as e:
+                logger.error(f"Failed to write state file {state_file}: {e}")
+
+        return processed_count
+
     def run_polling(self):
-        """Starts long polling loop for incoming Telegram updates."""
+        """Starts continuous long polling loop for incoming Telegram updates."""
         if not self.token:
             raise ValueError("TELEGRAM_BOT_TOKEN is not configured.")
 
@@ -131,15 +193,7 @@ class CinePortoBot:
 
         while True:
             try:
-                url = f"{self.api_base}/getUpdates?offset={offset}&timeout=20"
-                req = urllib.request.Request(
-                    url,
-                    headers={"User-Agent": "Mozilla/5.0"}
-                )
-                with urllib.request.urlopen(req, timeout=30) as resp:
-                    data = json.loads(resp.read().decode("utf-8", errors="replace"))
-
-                updates = data.get("result", [])
+                updates = self._fetch_updates(offset=offset, timeout=20)
                 for u in updates:
                     offset = max(offset, u["update_id"] + 1)
                     msg = u.get("message", {})

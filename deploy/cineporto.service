@@ -1,0 +1,15 @@
+[Unit]
+Description=CinePorto Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/gustavo/Documents/Projects/cineporto-bot
+ExecStart=/home/gustavo/Documents/Projects/cineporto-bot/.venv/bin/python3 /home/gustavo/Documents/Projects/cineporto-bot/main.py --bot
+Restart=always
+RestartSec=5
+EnvironmentFile=-/home/gustavo/Documents/Projects/cineporto-bot/.env
+EnvironmentFile=-/home/gustavo/.hermes/.env
+
+[Install]
+WantedBy=default.target
